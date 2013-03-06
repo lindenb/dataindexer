@@ -20,47 +20,9 @@ public class SecondaryDataWriter<PRIMARY,K>
 	private PrimaryDataIndexWriter<PRIMARY> owner;
 	private File tmpFile1;
 	
-	private class ObjectAndOffset
-		{
-		K object;
-		long offset;
-		ObjectAndOffset(K object,long offset)
-			{
-			this.object=object;
-			this.offset=offset;
-			}
-
-		}
 	
-	private class ObjectAndOffsetBinding
-		implements TupleBinding<ObjectAndOffset>
-		{
-		@Override
-		public ObjectAndOffset readObject(DataInputStream in) throws IOException
-			{
-			K object=getConfig().getDataBinding().readObject(in);
-			long offset=in.readLong();
-			return new ObjectAndOffset(object,offset);
-			}
-		public void writeObject(ObjectAndOffset o, java.io.DataOutputStream out) throws IOException
-			{
-			getConfig().getDataBinding().writeObject(o.object, out);
-			out.writeLong(o.offset);
-			}
-		}
-	private ObjectAndOffsetBinding objectAndOffsetBinding=new ObjectAndOffsetBinding();
-	
-	private Comparator<ObjectAndOffset> objectAndOffsetComparator=new Comparator<ObjectAndOffset>()
-		{
-		public int compare(
-				ObjectAndOffset o1, 
-				ObjectAndOffset o2)
-			{
-			int i= getConfig().getComparator().compare(o1.object, o2.object);
-			if(i!=0) return i;
-			return (o1.offset==o2.offset?0:o1.offset<o2.offset?-1:1);
-			}
-		};
+	private TupleBinding<ObjectAndOffset<K>> objectAndOffsetBinding=null;
+	private Comparator<ObjectAndOffset<K>> objectAndOffsetComparator=null;
 	
 	void setOwner(PrimaryDataIndexWriter<PRIMARY> owner)
 		{
@@ -74,6 +36,8 @@ public class SecondaryDataWriter<PRIMARY,K>
 	public SecondaryDataWriter(SecondaryConfig<PRIMARY,K> config) throws IOException
 		{
 		this.config=config;
+		this.objectAndOffsetBinding=config.createObjectAndOffsetBinding();
+		this.objectAndOffsetComparator=config.createObjectAndOffsetComparator();
 		}
 	
 	public SecondaryConfig<PRIMARY,K> getConfig()
@@ -206,7 +170,7 @@ public class SecondaryDataWriter<PRIMARY,K>
 		 {
 		 int buffer_capacity=100000;
 		 FileAndSize prevFile=null;
-		 List<ObjectAndOffset> buffer = new ArrayList<ObjectAndOffset>(buffer_capacity);
+		 List<ObjectAndOffset<K>> buffer = new ArrayList<ObjectAndOffset<K>>(buffer_capacity);
 		
 		 FileAndSize rootFile=new FileAndSize();
 		 rootFile.count=this.numberOfItems;
@@ -220,7 +184,7 @@ public class SecondaryDataWriter<PRIMARY,K>
 			 // Read M-element chunk at a time from the file
 			 while(rootFile.count>0 && buffer.size()<buffer_capacity)
 				 {
-				 ObjectAndOffset oao=rootFile.read();
+				 ObjectAndOffset<K> oao=rootFile.read();
 				 buffer.add(oao);
 				 }
 			// Sort M elements
@@ -244,7 +208,7 @@ public class SecondaryDataWriter<PRIMARY,K>
 				
 				ObjectAndOffset diskItem=null;
 				ObjectAndOffset objectItem=null;
-				Iterator<ObjectAndOffset> iter=buffer.iterator();
+				Iterator<ObjectAndOffset<K>> iter=buffer.iterator();
 				
 				System.err.println("Merging "+nextFile.file+"/"+prevFile.file);
 				prevFile.openRead();

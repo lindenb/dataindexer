@@ -32,15 +32,20 @@ public class PrimaryDatabaseReader<T> implements Closeable
 		return numberOfItems;
 		}
 	
-	public T get(long idx) throws IOException
+	private long checkIndexInRange(long idx)
 		{
-		if(idx<0 || idx>=this.numberOfItems) throw new IndexOutOfBoundsException(
+		if(idx<0 || idx>=this.size()) throw new IndexOutOfBoundsException(
 				"0<="+idx+"<"+size()
 				);
+		return idx;
+		}
+	
+	public T get(long idx) throws IOException
+		{
+		checkIndexInRange(idx);
 		this.indexFile.seek(idx*8);
 		
 		long offset=indexFile.readLong();
-		System.err.println("offset:"+offset);
 		this.dataFile.seek(offset);
 		DataInputStream dis=new DataInputStream(this.dataFile);
 		return getConfig().getDataBinding().readObject(dis);
@@ -51,6 +56,24 @@ public class PrimaryDatabaseReader<T> implements Closeable
 		{
 		this.indexFile.close();
 		this.dataFile.close();
+		}
+	
+	public void forEach(
+			long beginIndex,
+			long endIndex,
+			PrimaryForEach<T> callback
+			) throws IOException
+		{
+		callback.onBegin();
+		while(beginIndex<endIndex)
+			{
+			if( callback.apply(get(beginIndex))!=0)
+				{
+				break;
+				}
+			++beginIndex;
+			}
+		callback.onEnd();
 		}
 	
 	}
