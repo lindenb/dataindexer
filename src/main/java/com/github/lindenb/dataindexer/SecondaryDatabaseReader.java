@@ -1,6 +1,7 @@
 package com.github.lindenb.dataindexer;
 
 import java.io.IOException;
+import java.util.Comparator;
 
 public class SecondaryDatabaseReader<PRIMARY,T>
 	extends AbstractDatabaseReader<ObjectAndOffset<T>,SecondaryConfig<PRIMARY,T>>
@@ -36,13 +37,14 @@ public class SecondaryDatabaseReader<PRIMARY,T>
                 final T object
                 ) throws IOException
         {
+    	Comparator<T> cmp=getConfig().getComparator();
         long len = last - first;
         while (len > 0)
                 {
                 long half = len / 2;
                 long middle = first + half;
                 ObjectAndOffset<T> oao= get(middle);
-                if ( getConfig().getComparator().compare(oao.getObject(), object) < 0  )
+                if ( cmp.compare(oao.getObject(), object) < 0  )
                         {
                         first = middle + 1;
                         len -= half + 1;

@@ -5,34 +5,51 @@ import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.util.AbstractList;
+import java.util.List;
 
+/**
+ * Abstract class  to random-access a list of item 'T' 
+ * @author lindenb
+ *
+ * @param <T> the type of item
+ * @param <CONFIG> the configuration type
+ */
 public class AbstractDatabaseReader<T,CONFIG extends AbstractConfig<T>>
 	implements Closeable
 	{
+	/** the configuration file */
 	private CONFIG config;
+	/** number of items (size) stored */
 	private long numberOfItems=0;
-	protected RandomAccessFile indexFile=null;
-	protected RandomAccessInput dataFile=null;
+	/** handle to the index file , if needed. A fixed-size data file doesn't need this */
+	private RandomAccessFile indexFile=null;
+	/** handle to the data-file */
+	private RandomAccessInput dataFile=null;
+	/** constructor from a configuration */
 	protected  AbstractDatabaseReader(CONFIG config) throws IOException
 		{
 		this.config=config;
-		DataInputStream dis=new DataInputStream(new FileInputStream(getConfig().getSummaryFile()));
-		this.numberOfItems=dis.readLong();
-		dis.close();
 		}
 	
+	/** returns wether the datafile is currently opened */
 	public boolean isOpen()
 		{
 		return dataFile!=null;
 		}
 	
+	/** open the datafile and , if needed, the index file .
+	 * Does nothing if the datafile is already opened */
 	public void open() throws IOException
 		{
 		if(isOpen()) return;
-		DataInputStream dis=new DataInputStream(new FileInputStream(config.getSummaryFile()));
+		
+		DataInputStream dis=new DataInputStream(new FileInputStream(getConfig().getSummaryFile()));
 		this.numberOfItems=dis.readLong();
 		dis.close();
+
 		if(this.numberOfItems<0L) throw new IOException("summary file corrupted.");
+		/** not a constant data size, need a index file */
 		if(!config.isFixedSizeof())
 			{
 			this.indexFile=new RandomAccessFile(getConfig().getIndexFile(),"r");
@@ -41,11 +58,13 @@ public class AbstractDatabaseReader<T,CONFIG extends AbstractConfig<T>>
 		this.dataFile=getConfig().getRandomAccessFactory().openForReading(getConfig().getDataFile());
 		}
 	
+	/** return the configuration */
 	public CONFIG getConfig()
 		{
 		return config;
 		}
 	
+	/** returns the number of items stored in the datafile */
 	public long size()
 		{	
 		return numberOfItems;
@@ -59,16 +78,19 @@ public class AbstractDatabaseReader<T,CONFIG extends AbstractConfig<T>>
 		return idx;
 		}
 	
+	/** if the data have a fixed this, return the size of the data */
 	protected int getSizeOf()
 		{
 		return getConfig().getSizeOfItem();
 		}
 	
+	/** does T have a fixed size */
 	protected boolean isFixedSizeOf()
 		{
 		return getConfig().isFixedSizeof();
 		}
 	
+	/** convert a item index to a file-offset */
 	private long getOffsetFromIndex(long idx)  throws IOException
 		{
 		checkIndexInRange(idx);
@@ -82,7 +104,7 @@ public class AbstractDatabaseReader<T,CONFIG extends AbstractConfig<T>>
 			return indexFile.readLong();
 			}
 		}
-	
+	/** return the item 'T' a given offset in datafile */
 	T getItemFromOffset(long offset)  throws IOException
 		{
 		this.dataFile.seek(offset);
@@ -90,12 +112,14 @@ public class AbstractDatabaseReader<T,CONFIG extends AbstractConfig<T>>
 		return getConfig().getDataBinding().readObject(dis);
 		}
 	
+	/** return the item 'T' a given index in datafile with 0<=idx<size() */
 	public T get(long idx) throws IOException
 		{
 		return getItemFromOffset(getOffsetFromIndex(idx));
 		}
 	
 	@Override
+	/** close the underlying streams */
 	public void close() throws IOException
 		{
 		if(this.indexFile!=null)
@@ -108,6 +132,7 @@ public class AbstractDatabaseReader<T,CONFIG extends AbstractConfig<T>>
 			this.dataFile.close();
 			this.dataFile=null;
 			}
+		this.numberOfItems=0;
 		}
 	
 	public void forEach(
@@ -128,4 +153,27 @@ public class AbstractDatabaseReader<T,CONFIG extends AbstractConfig<T>>
 		callback.onEnd();
 		}
 	
+	/** return this database as a list. with a limit of Integer.MAX_VALUE items */
+	public List<T> asList()
+		{
+		return new AbstractList<T>()
+			{
+			@Override
+			public T get(int index)
+				{
+				try {
+					return AbstractDatabaseReader.this.get(index);
+					}
+				catch (IOException e) {
+					throw new RuntimeException(e);
+					}
+				}
+			@Override
+			public int size()
+					{
+					return (int)Math.min((long)Integer.MAX_VALUE, AbstractDatabaseReader.this.size());
+					}
+			};
+		}
+		
 	}

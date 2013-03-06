@@ -1,14 +1,19 @@
 package com.github.lindenb.dataindexer;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
-
+/**
+ * default implementation of {@link RandomAccessOutput}
+ * using a {@link FileOutputStream}
+ *
+ */
 public class DefaultRandomAccessOutput extends RandomAccessOutput
 	{
 	private long offset=0L;
-	public DefaultRandomAccessOutput(OutputStream delegate)
+	public DefaultRandomAccessOutput(File file) throws IOException
 		{
-		super(delegate);
+		super(new FileOutputStream(file));
 		}
 
 	@Override
@@ -18,10 +23,11 @@ public class DefaultRandomAccessOutput extends RandomAccessOutput
 		}
 
 	@Override
+	/* all parent 'write' are final. */
 	public void write(byte[] b, int off, int len) throws IOException
 		{
 		getDelegate().write(b, off, len);
 		this.offset+=len;
 		}
 
-}
+	}

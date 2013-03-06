@@ -4,13 +4,22 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 
-public class DefaultRandomAccessInput extends RandomAccessInput {
+/** default implementation of a RandomAccessInput with
+ * and underlying RandomAccessFile 
+ *
+ */
+public class DefaultRandomAccessInput
+	extends RandomAccessInput
+	{
+	/* underlying RandomAccessFile  */
 	private RandomAccessFile delegate;
 	public DefaultRandomAccessInput(File file) throws IOException
 		{
 		this.delegate=new RandomAccessFile(file, "r");
 		}
-	protected RandomAccessFile getDelegate() {
+	
+	protected RandomAccessFile getDelegate()
+		{
 		return delegate;
 		}
 	@Override
@@ -38,4 +47,9 @@ public class DefaultRandomAccessInput extends RandomAccessInput {
 		{
 		getDelegate().close();
 		}
-}
+	
+	@Override
+	public String toString() {
+		return getClass().getName();
+		}
+	}
