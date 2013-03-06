@@ -2,12 +2,27 @@ package com.github.lindenb.dataindexer;
 
 import java.io.IOException;
 import java.util.Comparator;
+import java.util.List;
 
 public class SecondaryDatabaseReader<PRIMARY,T>
 	extends AbstractDatabaseReader<ObjectAndOffset<T>,SecondaryConfig<PRIMARY,T>>
 	{
 	private PrimaryDatabaseReader<PRIMARY> owner;
-
+	
+	private static class FunctionAdapter<T>
+		implements Function<ObjectAndOffset<T>>
+		{
+		private Function<T> delegate;
+		FunctionAdapter(Function<T> delegate)
+			{
+			this.delegate=delegate;
+			}
+		@Override
+		public int apply(ObjectAndOffset<T> key) throws IOException
+			{
+			return this.delegate.apply(key.getObject());
+			}
+		}
 	
 	public SecondaryDatabaseReader(
 		PrimaryDatabaseReader<PRIMARY> owner,
@@ -57,21 +72,40 @@ public class SecondaryDatabaseReader<PRIMARY,T>
         return first;
         }
 
+    private long upperBound(
+    		long first,long last,
+    		final T select) throws IOException
+    	{
+        long len = last - first;
+        while (len > 0)
+                {
+                long half = len / 2;
+                long middle = first + half;
+                ObjectAndOffset<T> x= this.get(middle);
+                if (getConfig().getComparator().compare(select,x.getObject())<0)
+                        {
+                        len = half;
+                        }
+                else
+                        {
+                        first = middle + 1;
+                        len -= half + 1;
+                        }
+                }
+        return first;
+    	}
+    
 	
 	public void forEach(
 			T beginKey,
 			T endKey,
-			boolean includeLast
+			boolean includeLast,
+			Function<T> callback
 			) throws IOException
 		{
 		long N=lowerBound(beginKey);
-		while(N<size())
-			{
-			ObjectAndOffset<T> oao= get(N);
-			int i=getConfig().getComparator().compare(oao.getObject(), endKey);
-			if(i>0 || (i==0 && !includeLast)) break;
-			++N;
-			}
+		long M=upperBound(N,size(),endKey);
+		super.apply(N, M, new FunctionAdapter<T>(callback));
 		}
 	
 	

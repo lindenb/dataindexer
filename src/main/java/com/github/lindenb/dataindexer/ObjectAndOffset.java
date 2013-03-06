@@ -1,23 +1,21 @@
 package com.github.lindenb.dataindexer;
 
 class ObjectAndOffset<T>
+	extends Pair<T,Long>
 	{
-	private T object;
-	private long offset;
 	public ObjectAndOffset(T object,long offset)
 		{
-		this.object=object;
-		this.offset=offset;
+		super(object,offset);
 		}
 
 	public T getObject()
 		{
-		return object;
+		return getFirst();
 		}
 	
 	public long getOffset()
 		{
-		return offset;
+		return getSecond();
 		}
 	
 

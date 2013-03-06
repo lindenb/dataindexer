@@ -135,6 +135,22 @@ public class AbstractDatabaseReader<T,CONFIG extends AbstractConfig<T>>
 		this.numberOfItems=0;
 		}
 	
+	protected void apply(
+			long beginIndex,
+			long endIndex,
+			Function<T> callback
+			)throws IOException
+			{
+			while(beginIndex<endIndex)
+				{
+				if( callback.apply(get(beginIndex))!=0)
+					{
+					break;
+					}
+				++beginIndex;
+				}
+			}
+	
 	public void forEach(
 			long beginIndex,
 			long endIndex,
