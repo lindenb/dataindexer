@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -13,15 +14,13 @@ import java.util.Iterator;
 import java.util.List;
 
 public class SecondaryDataWriter<PRIMARY,K>
-	extends AbstractDataIndexer<K>
+	extends AbstractDataIndexer<ObjectAndOffset<K>,SecondaryConfig<PRIMARY,K>>
 	{
-	protected DataOutputStream dataOut;
-	private SecondaryConfig<PRIMARY,K> config;
+	protected DataOutputStream tmpOut;
 	private PrimaryDataIndexWriter<PRIMARY> owner;
 	private File tmpFile1;
 	
 	
-	private TupleBinding<ObjectAndOffset<K>> objectAndOffsetBinding=null;
 	private Comparator<ObjectAndOffset<K>> objectAndOffsetComparator=null;
 	
 	void setOwner(PrimaryDataIndexWriter<PRIMARY> owner)
@@ -35,24 +34,18 @@ public class SecondaryDataWriter<PRIMARY,K>
 	
 	public SecondaryDataWriter(SecondaryConfig<PRIMARY,K> config) throws IOException
 		{
-		this.config=config;
-		this.objectAndOffsetBinding=config.createObjectAndOffsetBinding();
+		super(config);
 		this.objectAndOffsetComparator=config.createObjectAndOffsetComparator();
 		}
 	
-	public SecondaryConfig<PRIMARY,K> getConfig()
-		{
-		return config;
-		}
-		
 	
 	private void ensureOpen()throws IOException
 		{
-		if(this.dataOut==null)
+		if(this.tmpOut==null)
 			{
-			this.tmpFile1=new File(getOwner().getConfig().getHomeDirectory(),"tmp.db2");
+			this.tmpFile1=File.createTempFile("tmp.",".data",getOwner().getConfig().getHomeDirectory());
 			FileOutputStream fos=new FileOutputStream(tmpFile1);
-			this.dataOut=new DataOutputStream(fos);
+			this.tmpOut=new DataOutputStream(fos);
 			}
 		}
 		
@@ -61,8 +54,8 @@ public class SecondaryDataWriter<PRIMARY,K>
 		ensureOpen();
 		for(K k:getConfig().getKeyCreator().getSecondaryKeys(object))
 			{
-			ObjectAndOffset oao=new ObjectAndOffset(k, primaryoffset);
-			this.objectAndOffsetBinding.writeObject(oao, this.dataOut);
+			ObjectAndOffset<K> oao=new ObjectAndOffset<K>(k, primaryoffset);
+			getDataBinding().writeObject(oao, this.tmpOut);
 			++numberOfItems;
 			}
 		}
@@ -72,11 +65,11 @@ public class SecondaryDataWriter<PRIMARY,K>
 	@Override
 	public void close() throws IOException
 		{
-		dataOut.flush();
-		dataOut.close();
+		tmpOut.flush();
+		tmpOut.close();
 		externalSort();
 		/*
-		FileInputStream dataIn=new FileInputStream("TODO");
+		FileInputStream dataIn=new FileInputStream("x");
 		List<ObjectAndOffset> buffer=new ArrayList<ObjectAndOffset>();
 		int index_buffer=0;
 		long indexFile=0L;
@@ -141,17 +134,17 @@ public class SecondaryDataWriter<PRIMARY,K>
 			out=new DataOutputStream(new FileOutputStream(this.file));
 			}
 		
-		ObjectAndOffset read()  throws IOException
+		ObjectAndOffset<K> read()  throws IOException
 			{
 			if(count<=0) throw new IOException("empty set");
-			ObjectAndOffset oao=objectAndOffsetBinding.readObject(this.in);
+			ObjectAndOffset<K> oao=getDataBinding().readObject(this.in);
 			count--;
 			return oao;
 			}
 		
-		void write(ObjectAndOffset oao) throws IOException
+		void write(ObjectAndOffset<K> oao) throws IOException
 			{
-			objectAndOffsetBinding.writeObject(oao,this.out);
+			getDataBinding().writeObject(oao,this.out);
 			++count;
 			}
 		
@@ -194,7 +187,7 @@ public class SecondaryDataWriter<PRIMARY,K>
 				 prevFile=new FileAndSize();
 				 prevFile.file=tmpFile();
 				 prevFile.openWrite();
-				 for (ObjectAndOffset oao:buffer)
+				 for (ObjectAndOffset<K> oao:buffer)
 				 	{
 					prevFile.write(oao);
 				 	}
@@ -206,8 +199,8 @@ public class SecondaryDataWriter<PRIMARY,K>
 				nextFile.file=tmpFile();
 				nextFile.openWrite();
 				
-				ObjectAndOffset diskItem=null;
-				ObjectAndOffset objectItem=null;
+				ObjectAndOffset<K> diskItem=null;
+				ObjectAndOffset<K> objectItem=null;
 				Iterator<ObjectAndOffset<K>> iter=buffer.iterator();
 				
 				System.err.println("Merging "+nextFile.file+"/"+prevFile.file);
@@ -269,6 +262,45 @@ public class SecondaryDataWriter<PRIMARY,K>
 	
 		
 		if(prevFile.count!=this.numberOfItems) throw new IOException();	
+		prevFile.openRead();
+		
+		RandomAccessOutput dataOut=getConfig().getRandomAccessFactory().openForWriting(
+				getConfig().getDataFile()
+				);
+		RandomAccessFile indexFile=null;
+		if(!getConfig().isFixedSizeof())
+			{
+			indexFile=new RandomAccessFile(getConfig().getIndexFile(), "rw");
+			}
+		
+		for(long n=0;n< prevFile.count;++n)
+			{
+			ObjectAndOffset<K> o=prevFile.read();
+			long offset=-1L;
+			
+			
+			if(indexFile!=null)
+				{
+				offset=dataOut.getOffset();
+				indexFile.writeLong(offset);
+				}
+			
+			DataOutputStream daos=new DataOutputStream(dataOut);
+			getDataBinding().writeObject(o,daos);
+			daos.flush();
+			}
+		
+		if(indexFile!=null)
+			{
+			indexFile.close();
+			}
+		
+		dataOut.flush();
+		dataOut.close();
+		
+		prevFile.close();
+		prevFile.file.delete();
+		this.tmpFile1.delete();
 		
 		}
 			 
