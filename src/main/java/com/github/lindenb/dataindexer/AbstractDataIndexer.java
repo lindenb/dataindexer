@@ -25,6 +25,13 @@ public abstract class AbstractDataIndexer<T,CONFIG extends AbstractConfig<T>>
 		{
 		this.dataBinding=cfg.getDataBinding();
 		this.config=cfg;
+		
+		}
+	
+	protected void checkConfig() throws IOException
+		{
+		if(getConfig()==null) throw new IllegalStateException("config is null");
+		getConfig().validateForReading();
 		}
 	
 	/** close the underlying stream */

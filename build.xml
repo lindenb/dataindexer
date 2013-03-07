@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project default="all">
+
+<target name="all" depends="library"></target>
+<target name="library">
+	<mkdir dir="lib"/>
+	<mkdir dir="tmp"/>
+	<javac srcdir="src" destdir="tmp" debug="true" includeantruntime="false">
+		<include name="**/dataindexer/*.java" />
+	</javac>
+	<jar destfile="lib/dataindexer.jar" basedir="tmp">
+		<manifest>
+			<attribute name="Built-By" value="${user.name}"/>
+		</manifest>
+	</jar>
+	<delete dir="tmp"/>
+</target>
+</project>

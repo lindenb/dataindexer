@@ -9,7 +9,35 @@ public class SecondaryConfig<PRIMARY, K> extends AbstractConfig<ObjectAndOffset<
 	protected SecondaryKeyCreator<PRIMARY, K> keyCreator;
 	private Comparator<K> comparator;
 	private TupleBinding<K> keyBinding=null;
-	private TupleBinding<ObjectAndOffset<K>> dataBinding;
+	private TupleBinding<ObjectAndOffset<K>> dataBinding=null;
+	private int bufferSize=10000;
+	
+	@Override
+	protected void validate() throws IOException
+		{
+		super.validate();
+		if(getComparator()==null) throw new IllegalStateException("Undefined comparator");
+		if(getKeyBinding()==null) throw new IllegalStateException("Undefined keyBinding");
+		if(getDataBinding()==null) throw new IllegalStateException("Undefined dataBinding");
+		}
+	
+	
+	public void setBufferSize(int bufferSize)
+		{
+		this.bufferSize = bufferSize;
+		}
+	
+	public int getBufferSize()
+		{
+		return bufferSize;
+		}
+	
+	@Override
+	public void validateForWriting() throws IOException
+		{
+		super.validateForWriting();
+		if(getBufferSize()<=0) throw new IllegalStateException("Illegal buffer size");
+		}
 	
 	public SecondaryKeyCreator<PRIMARY, K> getKeyCreator() {
 		return keyCreator;

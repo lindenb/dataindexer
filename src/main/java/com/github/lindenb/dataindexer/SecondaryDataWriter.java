@@ -16,26 +16,29 @@ import java.util.List;
 public class SecondaryDataWriter<PRIMARY,K>
 	extends AbstractDataIndexer<ObjectAndOffset<K>,SecondaryConfig<PRIMARY,K>>
 	{
-	protected DataOutputStream tmpOut;
+	private DataOutputStream tmpOut;
 	private PrimaryDataIndexWriter<PRIMARY> owner;
 	private File tmpFile1;
 	
 	
 	private Comparator<ObjectAndOffset<K>> objectAndOffsetComparator=null;
 	
-	void setOwner(PrimaryDataIndexWriter<PRIMARY> owner)
-		{
-		this.owner=owner;
-		}
+
 	
 	public PrimaryDataIndexWriter<PRIMARY> getOwner() {
 		return owner;
 		}
 	
-	public SecondaryDataWriter(SecondaryConfig<PRIMARY,K> config) throws IOException
+	public SecondaryDataWriter(SecondaryConfig<PRIMARY,K> config,PrimaryDataIndexWriter<PRIMARY> owner) throws IOException
 		{
 		super(config);
+		if(config.getHomeDirectory()==null)
+			{
+			config.setHomeDirectory(owner.getConfig().getHomeDirectory());
+			}
 		this.objectAndOffsetComparator=config.createObjectAndOffsetComparator();
+		this.owner=owner;
+		this.owner.addSecondary(this);
 		}
 	
 	
@@ -43,8 +46,8 @@ public class SecondaryDataWriter<PRIMARY,K>
 		{
 		if(this.tmpOut==null)
 			{
-			this.tmpFile1=File.createTempFile("tmp.",".data",getOwner().getConfig().getHomeDirectory());
-			FileOutputStream fos=new FileOutputStream(tmpFile1);
+			this.tmpFile1=tmpFile();
+			FileOutputStream fos=new FileOutputStream(this.tmpFile1);
 			this.tmpOut=new DataOutputStream(fos);
 			}
 		}
@@ -65,58 +68,20 @@ public class SecondaryDataWriter<PRIMARY,K>
 	@Override
 	public void close() throws IOException
 		{
-		tmpOut.flush();
-		tmpOut.close();
-		externalSort();
-		/*
-		FileInputStream dataIn=new FileInputStream("x");
-		List<ObjectAndOffset> buffer=new ArrayList<ObjectAndOffset>();
-		int index_buffer=0;
-		long indexFile=0L;
-		File tmpFile2=null;
-		while(indexFile<this.numberOfItems)
+		if(tmpOut!=null)
 			{
-			//fill buffer
-			while(buffer.size()<10000 && indexFile< this.numberOfItems)
-				{
-				buffer.add(objectAndOffsetBinding.readObject(dataIn));
-				indexFile++;
-				}
-			//sort the buffer
-			Collections.sort(buffer,objectAndOffsetComparator);
-			//no previous file
-			if(tmpFile2==null)
-				{
-				//dump everty think
-				tmpFile2=new File("TODO2");
-				FileOutputStream fout=new FileOutputStream(tmpFile2);
-				for(ObjectAndOffset o:buffer)
-					{
-					objectAndOffsetBinding.writeObject(o, fout);
-					}
-				fout.flush();
-				fout.close();
-				buffer.clear();
-				}
-			else //merge sort with previous file
-				{
-				ObjectAndOffset curr=null;
-				boolean need_read_from_file=true;
-				while(!buffer.isEmpty() && count_file>0)
-					{
-					
-					}
-				
-				}
+			tmpOut.flush();
+			tmpOut.close();
+			externalSort();
+			this.tmpFile1=null;
+			this.tmpOut=null;
 			}
-			*/
 		}
 	
 	 private File tmpFile() throws IOException
 	 	{
-		return File.createTempFile("_tmp.",".data",
-				getOwner().getConfig().getHomeDirectory()
-				);
+	 	File f=File.createTempFile("tmp."+getConfig().getName(),".data",getConfig().getHomeDirectory());
+	 	return f;
 	 	} 
 	
 	 private class FileAndSize
@@ -161,8 +126,14 @@ public class SecondaryDataWriter<PRIMARY,K>
 	 
 	 private void externalSort() throws IOException
 		 {
-		 int buffer_capacity=100000;
+		 if(this.tmpOut==null) return;//already done
+		 final int buffer_capacity=getConfig().getBufferSize();
 		 FileAndSize prevFile=null;
+
+		 if(this.numberOfItems>=0)
+			 {
+			
+			 
 		 List<ObjectAndOffset<K>> buffer = new ArrayList<ObjectAndOffset<K>>(buffer_capacity);
 		
 		 FileAndSize rootFile=new FileAndSize();
@@ -203,7 +174,6 @@ public class SecondaryDataWriter<PRIMARY,K>
 				ObjectAndOffset<K> objectItem=null;
 				Iterator<ObjectAndOffset<K>> iter=buffer.iterator();
 				
-				System.err.println("Merging "+nextFile.file+"/"+prevFile.file);
 				prevFile.openRead();
 				
 				
@@ -253,17 +223,15 @@ public class SecondaryDataWriter<PRIMARY,K>
 					
 				prevFile.close();
 				nextFile.close();
-				
 				prevFile.file.delete();
 				prevFile=nextFile;
 			 	}
 			 }
 		rootFile.close();
-	
 		
-		if(prevFile.count!=this.numberOfItems) throw new IOException();	
-		prevFile.openRead();
 		
+			 }
+		 
 		RandomAccessOutput dataOut=getConfig().getRandomAccessFactory().openForWriting(
 				getConfig().getDataFile()
 				);
@@ -273,21 +241,26 @@ public class SecondaryDataWriter<PRIMARY,K>
 			indexFile=new RandomAccessFile(getConfig().getIndexFile(), "rw");
 			}
 		
-		for(long n=0;n< prevFile.count;++n)
+		if(prevFile!=null)//size()>0
 			{
-			ObjectAndOffset<K> o=prevFile.read();
-			long offset=-1L;
-			
-			
-			if(indexFile!=null)
+			if(prevFile.count!=this.numberOfItems) throw new IOException();	
+			prevFile.openRead();
+
+			while(prevFile.count>0)
 				{
-				offset=dataOut.getOffset();
-				indexFile.writeLong(offset);
+				ObjectAndOffset<K> o=prevFile.read();
+				long offset=-1L;
+				
+				
+				if(indexFile!=null)
+					{
+					offset=dataOut.getOffset();
+					indexFile.writeLong(offset);
+					}
+				DataOutputStream daos=new DataOutputStream(dataOut);
+				getDataBinding().writeObject(o,daos);
+				daos.flush();
 				}
-			
-			DataOutputStream daos=new DataOutputStream(dataOut);
-			getDataBinding().writeObject(o,daos);
-			daos.flush();
 			}
 		
 		if(indexFile!=null)
@@ -301,7 +274,8 @@ public class SecondaryDataWriter<PRIMARY,K>
 		prevFile.close();
 		prevFile.file.delete();
 		this.tmpFile1.delete();
-		
+		this.tmpOut=null;
+		writeSummary();
 		}
 			 
 		 

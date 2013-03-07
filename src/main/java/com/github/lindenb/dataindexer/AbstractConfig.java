@@ -1,6 +1,7 @@
 package com.github.lindenb.dataindexer;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -95,6 +96,28 @@ public abstract class AbstractConfig<T>
 			}
 		return logger;
 		}
-
 	
+	protected void validate() throws IOException
+		{
+		File homeDir;
+		if(this.getDataBinding()==null) throw new IllegalStateException("config.databinding is undefined");
+		if(this.getRandomAccessFactory()==null) throw new IllegalStateException("randomAccessFactory is null");
+		if((homeDir=this.getHomeDirectory())==null) throw new NullPointerException("home.dir undefined.");
+		if(this.getName()==null) throw new NullPointerException("undefined name");
+		if(!homeDir.exists()) throw new IOException("home directory doesn't exist:"+homeDir);
+		if(!homeDir.isDirectory()) throw new IOException("not a directory exist:"+homeDir);
+		}
+	
+	public void validateForReading() throws IOException
+		{
+		validate();
+		}
+	public void validateForWriting() throws IOException
+		{
+		validate();
+		File f;
+		if(!(f=getDataFile()).exists()) throw new IOException("data file does not exists:"+f);
+		if(!(f=getSummaryFile()).exists()) throw new IOException("summary file does not exists:"+f);
+		if(!isFixedSizeof() && !(f=getIndexFile()).exists()) throw new IOException("summary file does not exists:"+f);
+		}
 	}

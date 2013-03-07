@@ -8,9 +8,11 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.net.URL;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -21,6 +23,7 @@ import com.github.lindenb.dataindexer.PrimaryDataIndexWriter;
 import com.github.lindenb.dataindexer.PrimaryDatabaseReader;
 import com.github.lindenb.dataindexer.SecondaryConfig;
 import com.github.lindenb.dataindexer.SecondaryDataWriter;
+import com.github.lindenb.dataindexer.SecondaryDatabaseReader;
 import com.github.lindenb.dataindexer.SecondaryKeyCreator;
 import com.github.lindenb.dataindexer.TupleBinding;
 
@@ -64,24 +67,41 @@ public class DBSnpLoader
 			}
 		}
 	
+	private BufferedReader opendbSnp137()
+		throws IOException
+		{
+		InputStream in=null;
+		if(dbSnp137File.exists())
+			{
+			in=new FileInputStream(this.dbSnp137File);
+			}
+		else
+			{
+			in=new URL("http://hgdownload.cse.ucsc.edu/goldenPath/hg19/database/snp137.txt.gz").openStream();
+			}
+		return new BufferedReader(new InputStreamReader(new GZIPInputStream(in)));
+		}
 	
 	public void test()
 		throws IOException
 		{
+		File homDir=new File("tmp.dbsnp");
+		homDir.mkdir();
 		PrimaryConfig<Snp> config=new PrimaryConfig<Snp>();
 		config.setName("tmp.dbsnp");
-		config.setHomeDirectory(this.dbSnp137File.getParentFile());
+		config.setHomeDirectory(homDir);
 		config.setDataBinding(new SnpBinding());
 		PrimaryDataIndexWriter<Snp> primaryWriter=new PrimaryDataIndexWriter<DBSnpLoader.Snp>( config );
 		
 		SecondaryConfig<Snp, Integer> cfg2=new SecondaryConfig<Snp, Integer>();
+		cfg2.setName("rs");
 		cfg2.setComparator(new Comparator<Integer>() {
 			@Override
 			public int compare(Integer arg0, Integer arg1) {
 				return arg0.compareTo(arg1);
 				}
 			});
-		cfg2.setDataBinding(new TupleBinding<Integer>() {
+		cfg2.setKeyBinding(new TupleBinding<Integer>() {
 			@Override
 			public Integer readObject(DataInputStream in) throws IOException {
 				return in.readInt();
@@ -101,17 +121,16 @@ public class DBSnpLoader
 				return S;
 				}
 			});
-		SecondaryDataWriter<Snp, Integer> rs2snp=new SecondaryDataWriter<DBSnpLoader.Snp, Integer>(cfg2);
-		primaryWriter.addSecondary(rs2snp);
+		SecondaryDataWriter<Snp, Integer> rs2snp=new SecondaryDataWriter<DBSnpLoader.Snp, Integer>(cfg2,primaryWriter);
 		
 		
 		long nLine=0;
-		BufferedReader in=new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(this.dbSnp137File))));
+		BufferedReader in=opendbSnp137();
 		String line;
 		Pattern tab=Pattern.compile("[\t]");
 		while((line=in.readLine())!=null)
 			{
-			if(++nLine>1000000) break;
+			if(++nLine>100000) break;
 			if(nLine%10000==0) System.err.println("count:"+nLine);
 			String tokens[]=tab.split(line);
 			Snp snp=new Snp();
@@ -127,13 +146,28 @@ public class DBSnpLoader
 		
 		Random rand=new Random(System.currentTimeMillis());
 		PrimaryDatabaseReader<Snp> primaryDatabaseReader=new PrimaryDatabaseReader<DBSnpLoader.Snp>(config);
+		primaryDatabaseReader.open();
+		List<Integer> L=new ArrayList<Integer>();
 		for(int i=0;i< 10;++i)
 			{
 			int index=rand.nextInt((int)primaryDatabaseReader.size());
 			Snp snp=primaryDatabaseReader.get(index);
+			System.out.println(snp);
+			L.add(snp.rs_id);
 			}
-		primaryDatabaseReader.size();
+		SecondaryDatabaseReader<Snp, Integer> r2=new SecondaryDatabaseReader<DBSnpLoader.Snp, Integer>(primaryDatabaseReader, cfg2);
+		r2.open();
+		for(int i:L)
+			{
+			System.out.println("rs"+i);
+			for(long i2:r2.equal_range(i))
+				{
+				System.out.println(r2.get(i2));
+				}
+			
+			}
 		
+		primaryDatabaseReader.close();
 		}
 	
 	/**

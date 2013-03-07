@@ -6,7 +6,12 @@ import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.List;
 
-
+/**
+ * Primary database writer 
+ * @author lindenb
+ *
+ * @param <T>
+ */
 public class PrimaryDataIndexWriter<T>
 	extends AbstractDataIndexer<T,PrimaryConfig<T>>
 	{
@@ -19,21 +24,27 @@ public class PrimaryDataIndexWriter<T>
 		super(config);
 		}
 	
-	
+	private boolean config_checked=false;
+	protected void checkConfig() throws IOException
+		{
+		if(config_checked) return;
+		config_checked=true;
+ 		super.checkConfig();
+		}
 
 	//private List<SecondaryDataIndexer<T, ?>> secondary=new ArrayList<SecondaryDataIndexer<T,?>>();
 	private RandomAccessFile indexFile=null;
-	private RandomAccessOutput dataOutput;
+	private RandomAccessOutput dataOutput=null;
 	
 	private void ensureOpen() throws IOException
 		{
+		checkConfig();
 		if(this.indexFile==null && !getConfig().isFixedSizeof()) indexFile=new RandomAccessFile(getConfig().getIndexFile(),"rw");
 		if(this.dataOutput==null) this.dataOutput=getConfig().getRandomAccessFactory().openForWriting(getConfig().getDataFile());
 		}
 	
-	public void addSecondary(SecondaryDataWriter<T, ?> db2)
+	void addSecondary(SecondaryDataWriter<T, ?> db2)
 		{
-		db2.setOwner(this);
 		this.secondaries.add(db2);
 		}
 	

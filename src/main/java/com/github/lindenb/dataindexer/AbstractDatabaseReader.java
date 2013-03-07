@@ -38,11 +38,19 @@ public class AbstractDatabaseReader<T,CONFIG extends AbstractConfig<T>>
 		return dataFile!=null;
 		}
 	
+	
+	protected void validateConfig() throws IOException
+		{
+		if(getConfig()==null) throw new IOException("config is null");
+		getConfig().validateForReading();
+		}
+	
 	/** open the datafile and , if needed, the index file .
 	 * Does nothing if the datafile is already opened */
 	public void open() throws IOException
 		{
 		if(isOpen()) return;
+		validateConfig();
 		
 		DataInputStream dis=new DataInputStream(new FileInputStream(getConfig().getSummaryFile()));
 		this.numberOfItems=dis.readLong();
