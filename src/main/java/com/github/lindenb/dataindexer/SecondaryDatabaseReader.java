@@ -2,7 +2,6 @@ package com.github.lindenb.dataindexer;
 
 import java.io.IOException;
 import java.util.Comparator;
-import java.util.List;
 
 public class SecondaryDatabaseReader<PRIMARY,T>
 	extends AbstractDatabaseReader<ObjectAndOffset<T>,SecondaryConfig<PRIMARY,T>>
@@ -38,15 +37,76 @@ public class SecondaryDatabaseReader<PRIMARY,T>
 		return this.owner;
 		}
 	
+	@Override
+	/** this is the sizeof a ObjectAndOffset= sizeof(object)+sizeof(long) */
+	protected int getSizeOf()
+		{
+		return super.getSizeOf()+8;
+		}	
 	
-	protected  long lowerBound(final T object)
+	protected  long lower_bound(final T object)
 		throws IOException
 		{
-		return lowerBound(0L, this.size(), object);
+		return lower_bound(0L, this.size(), object);
 		}
 	
+	public boolean contains(final T object) throws IOException
+		{
+		return !equal_range(object).isEmpty();
+		}
+	
+	public Interval equal_range(
+			long first,
+            long last,
+            final T val
+            ) throws IOException
+		{	
+	    
+
+	        long len = last-first;
+	        long half;
+	        long middle, left, right;
+
+	        while (len > 0)
+	  	{
+	  	  half = len /2;
+	  	  middle = first;
+	  	  middle+=half;
+	  	  T at_mid=get(middle).getObject();
+	  	  if (getConfig().getComparator().compare(at_mid, val) <0)
+	  	    {
+	  	      first = middle;
+	  	      ++first;
+	  	      len = len - half - 1;
+	  	    }
+	  	  else if (getConfig().getComparator().compare(val,at_mid) <0 )
+	  	  	{
+	  	    len = half;
+	  	  	}
+	  	  else
+	  	    {
+	  	      left =lower_bound(first, middle, val);
+	  	     first+=len;
+	  	      right = upper_bound(++middle, first, val);
+	  	      return new Interval(left, right);
+	  	    }
+	  	}
+	        return  new Interval(first, first);
+
+		
+		}
+	
+	public Interval equal_range(
+            final T object
+            ) throws IOException
+		{
+		return equal_range(0,size(),object);
+		}
+	
+	
+	
     /** C+ lower_bound */
-    protected  long lowerBound(
+    protected  long lower_bound(
                 long first,
                 long last,
                 final T object
@@ -72,7 +132,7 @@ public class SecondaryDatabaseReader<PRIMARY,T>
         return first;
         }
 
-    private long upperBound(
+    private long upper_bound(
     		long first,long last,
     		final T select) throws IOException
     	{
@@ -103,8 +163,8 @@ public class SecondaryDatabaseReader<PRIMARY,T>
 			Function<T> callback
 			) throws IOException
 		{
-		long N=lowerBound(beginKey);
-		long M=upperBound(N,size(),endKey);
+		long N=lower_bound(beginKey);
+		long M=upper_bound(N,size(),endKey);
 		super.apply(N, M, new FunctionAdapter<T>(callback));
 		}
 	

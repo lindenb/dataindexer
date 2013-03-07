@@ -78,7 +78,7 @@ public class AbstractDatabaseReader<T,CONFIG extends AbstractConfig<T>>
 		return idx;
 		}
 	
-	/** if the data have a fixed this, return the size of the data */
+	/** if the data have a fixed this, return the size in bytes of the data */
 	protected int getSizeOf()
 		{
 		return getConfig().getSizeOfItem();

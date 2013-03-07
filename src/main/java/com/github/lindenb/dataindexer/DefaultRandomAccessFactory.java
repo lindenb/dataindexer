@@ -1,7 +1,6 @@
 package com.github.lindenb.dataindexer;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 
 /** default implementation of RandomAccessFactory using 
