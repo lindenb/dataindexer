@@ -4,6 +4,7 @@ import java.io.Closeable;
 import java.io.DataOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.logging.Logger;
 
 /**
  * base class for both primary and secondary database writer
@@ -15,6 +16,8 @@ import java.io.IOException;
 public abstract class AbstractDataIndexer<T,CONFIG extends AbstractConfig<T>>
 	implements Closeable
 	{
+	protected static final Logger LOG=Logger.getLogger("com.github.lindenb.dataindexer");
+
 	/** number of items stored */
 	protected long numberOfItems=0L;
 	/** data binding */

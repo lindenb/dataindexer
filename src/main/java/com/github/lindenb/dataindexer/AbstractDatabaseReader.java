@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.AbstractList;
 import java.util.List;
+import java.util.logging.Logger;
 
 /**
  * Abstract class  to random-access a list of item 'T' 
@@ -18,6 +19,7 @@ import java.util.List;
 public class AbstractDatabaseReader<T,CONFIG extends AbstractConfig<T>>
 	implements Closeable
 	{
+	protected static final Logger LOG=Logger.getLogger("com.github.lindenb.dataindexer");
 	/** the configuration file */
 	private CONFIG config;
 	/** number of items (size) stored */

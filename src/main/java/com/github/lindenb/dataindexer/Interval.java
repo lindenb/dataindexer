@@ -10,11 +10,14 @@ implements Iterable<Long>
 		{
 		super(B,E);
 		}
-	boolean isEmpty()
+	public boolean isEmpty()
 		{
 		return getFirst().equals(getSecond());
 		}
-	
+	public long distance()
+		{
+		return getSecond()-getFirst();
+		}
 	@Override
 	public String toString()
 		{

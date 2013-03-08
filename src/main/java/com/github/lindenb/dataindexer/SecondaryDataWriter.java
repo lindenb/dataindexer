@@ -121,7 +121,11 @@ public class SecondaryDataWriter<PRIMARY,K>
 				out.flush();
 				out.close();
 				}
-			}	
+			}
+		@Override
+		public String toString() {
+			return file.toString()+" N="+count;
+			}
 	 	}
 	 
 	 private void externalSort() throws IOException
@@ -144,6 +148,7 @@ public class SecondaryDataWriter<PRIMARY,K>
 		 // Iterate through the elements in the file
 		 while(rootFile.count>0)
 		 	{
+			 LOG.info("root : "+rootFile);
 			 buffer.clear();
 			 // Read M-element chunk at a time from the file
 			 while(rootFile.count>0 && buffer.size()<buffer_capacity)
@@ -151,12 +156,14 @@ public class SecondaryDataWriter<PRIMARY,K>
 				 ObjectAndOffset<K> oao=rootFile.read();
 				 buffer.add(oao);
 				 }
+			 LOG.info("sorting buffer N="+buffer.size());
 			// Sort M elements
 			 Collections.sort(buffer,this.objectAndOffsetComparator);
 			 if(prevFile==null)
 			 	{
 				 prevFile=new FileAndSize();
 				 prevFile.file=tmpFile();
+				 LOG.info("saving buffer to="+prevFile);
 				 prevFile.openWrite();
 				 for (ObjectAndOffset<K> oao:buffer)
 				 	{
@@ -176,6 +183,7 @@ public class SecondaryDataWriter<PRIMARY,K>
 				
 				prevFile.openRead();
 				
+				LOG.info("merging "+prevFile);
 				
 				for(;;)
 					{
@@ -231,7 +239,7 @@ public class SecondaryDataWriter<PRIMARY,K>
 		
 		
 			 }
-		 
+		 LOG.info("saving result");
 		RandomAccessOutput dataOut=getConfig().getRandomAccessFactory().openForWriting(
 				getConfig().getDataFile()
 				);
@@ -275,7 +283,9 @@ public class SecondaryDataWriter<PRIMARY,K>
 		prevFile.file.delete();
 		this.tmpFile1.delete();
 		this.tmpOut=null;
+		
 		writeSummary();
+		LOG.info("done");
 		}
 			 
 		 

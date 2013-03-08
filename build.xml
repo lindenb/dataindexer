@@ -1,11 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project default="all">
+<project default="all"  xmlns:ivy="antlib:org.apache.ivy.ant">
+<property name="ivy.install.version" value="2.3.0" />
+<property name="ivy.jar.dir" value="${user.home}/.ivy" />
+<property name="ivy.jar.file" value="${ivy.jar.dir}/ivy.jar" />
 
+
+
+	
 <target name="all" depends="library"></target>
+	
 <target name="library">
 	<mkdir dir="lib"/>
 	<mkdir dir="tmp"/>
-	<javac srcdir="src" destdir="tmp" debug="true" includeantruntime="false">
+	
+	<javac srcdir="src/main" destdir="tmp" debug="true" includeantruntime="false">
 		<include name="**/dataindexer/*.java" />
 	</javac>
 	<jar destfile="lib/dataindexer.jar" basedir="tmp">
@@ -15,4 +23,27 @@
 	</jar>
 	<delete dir="tmp"/>
 </target>
+	
+	
+	
+	<target name="download-ivy" unless="skip.download">
+		
+		<setproxy proxyhost="cache.ha.univ-nantes.fr" proxyport="3128"/>
+    	<mkdir dir="${ivy.jar.dir}"/>
+    	<get src="http://repo1.maven.org/maven2/org/apache/ivy/ivy/${ivy.install.version}/ivy-${ivy.install.version}.jar"
+    		 dest="${ivy.jar.file}" usetimestamp="true"/>
+    </target>
+    
+     <target name="install-ivy" depends="download-ivy" description="--> install ivy">
+    	<path id="ivy.lib.path">
+    	    <fileset dir="${ivy.jar.dir}" includes="*.jar"/>
+    	</path>
+    	<taskdef resource="org/apache/ivy/ant/antlib.xml"
+    	          uri="antlib:org.apache.ivy.ant" classpathref="ivy.lib.path"/>
+    </target>
+    
+	
+  <target name="libs" depends="install-ivy"  description="">
+	<ivy:cachepath pathid="lib.path.id"/>
+  </target>	
 </project>

@@ -15,6 +15,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 
@@ -29,7 +31,45 @@ import com.github.lindenb.dataindexer.TupleBinding;
 
 public class DBSnpLoader
 	{
+	protected static final Logger LOG=Logger.getLogger("com.github.lindenb.dataindexer");
+
 	private File dbSnp137File;
+	
+	private static class Rs
+		{
+		int rs_id;
+		Rs(int rs_id)
+			{
+			this.rs_id=rs_id;
+			}
+		
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + rs_id;
+			return result;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj)
+				return true;
+			if (obj == null)
+				return false;
+			if (getClass() != obj.getClass())
+				return false;
+			Rs other = (Rs) obj;
+			if (rs_id != other.rs_id)
+				return false;
+			return true;
+		}
+
+		@Override
+		public String toString() {
+			return "rs"+rs_id;
+			}
+		}
 	
 	private static class Snp
 		{
@@ -37,7 +77,7 @@ public class DBSnpLoader
 		String chrom;
 		int chromStart;
 		int chromEnd;
-		int rs_id;
+		Rs rs_id;
 		@Override
 		public String toString() {
 			return "rs"+rs_id+" "+chrom+":"+chromStart+"-"+chromEnd;
@@ -54,7 +94,7 @@ public class DBSnpLoader
 			snp.chrom=in.readUTF();
 			snp.chromStart=in.readInt();
 			snp.chromEnd=in.readInt();
-			snp.rs_id=in.readInt();
+			snp.rs_id=new Rs(in.readInt());
 			return snp;
 			}
 		@Override
@@ -63,7 +103,7 @@ public class DBSnpLoader
 			out.writeUTF(o.chrom);
 			out.writeInt(o.chromStart);
 			out.writeInt(o.chromEnd);
-			out.writeInt(o.rs_id);
+			out.writeInt(o.rs_id.rs_id);
 			}
 		}
 	
@@ -89,39 +129,42 @@ public class DBSnpLoader
 		homDir.mkdir();
 		PrimaryConfig<Snp> config=new PrimaryConfig<Snp>();
 		config.setName("tmp.dbsnp");
+		LOG.setLevel(Level.ALL);
 		config.setHomeDirectory(homDir);
 		config.setDataBinding(new SnpBinding());
 		PrimaryDataIndexWriter<Snp> primaryWriter=new PrimaryDataIndexWriter<DBSnpLoader.Snp>( config );
 		
-		SecondaryConfig<Snp, Integer> cfg2=new SecondaryConfig<Snp, Integer>();
+		SecondaryConfig<Snp, Rs> cfg2=new SecondaryConfig<Snp, Rs>();
 		cfg2.setName("rs");
-		cfg2.setComparator(new Comparator<Integer>() {
+		cfg2.setBufferSize(1000000);
+		cfg2.setComparator(new Comparator<Rs>() {
 			@Override
-			public int compare(Integer arg0, Integer arg1) {
-				return arg0.compareTo(arg1);
+			public int compare(Rs arg0, Rs arg1)
+				{
+				return arg0.rs_id-arg1.rs_id;
 				}
 			});
-		cfg2.setKeyBinding(new TupleBinding<Integer>() {
+		cfg2.setKeyBinding(new TupleBinding<Rs>() {
 			@Override
-			public Integer readObject(DataInputStream in) throws IOException {
-				return in.readInt();
+			public Rs readObject(DataInputStream in) throws IOException {
+				return new Rs(in.readInt());
 				}
 			@Override
-			public void writeObject(Integer o, DataOutputStream out)
+			public void writeObject(Rs o, DataOutputStream out)
 					throws IOException {
-				out.writeInt(o);
+				out.writeInt(o.rs_id);
 				}
 			});
-		cfg2.setKeyCreator(new SecondaryKeyCreator<DBSnpLoader.Snp, Integer>()
+		cfg2.setKeyCreator(new SecondaryKeyCreator<DBSnpLoader.Snp, Rs>()
 			{
 			@Override
-			public Set<Integer> getSecondaryKeys(Snp t) {
-				Set<Integer> S= new HashSet<Integer>(1);
+			public Set<Rs> getSecondaryKeys(Snp t) {
+				Set<Rs> S= new HashSet<Rs>(1);
 				S.add(t.rs_id);
 				return S;
 				}
 			});
-		SecondaryDataWriter<Snp, Integer> rs2snp=new SecondaryDataWriter<DBSnpLoader.Snp, Integer>(cfg2,primaryWriter);
+		SecondaryDataWriter<Snp, Rs> rs2snp=new SecondaryDataWriter<DBSnpLoader.Snp, Rs>(cfg2,primaryWriter);
 		
 		
 		long nLine=0;
@@ -138,7 +181,7 @@ public class DBSnpLoader
 			snp.chrom=tokens[1];
 			snp.chromStart=Integer.parseInt(tokens[2]);
 			snp.chromEnd=Integer.parseInt(tokens[3]);
-			snp.rs_id=Integer.parseInt(tokens[4].substring(2));
+			snp.rs_id=new Rs(Integer.parseInt(tokens[4].substring(2)));
 			primaryWriter.insert(snp);
 			}
 		in.close();
@@ -147,7 +190,7 @@ public class DBSnpLoader
 		Random rand=new Random(System.currentTimeMillis());
 		PrimaryDatabaseReader<Snp> primaryDatabaseReader=new PrimaryDatabaseReader<DBSnpLoader.Snp>(config);
 		primaryDatabaseReader.open();
-		List<Integer> L=new ArrayList<Integer>();
+		List<Rs> L=new ArrayList<Rs>();
 		for(int i=0;i< 10;++i)
 			{
 			int index=rand.nextInt((int)primaryDatabaseReader.size());
@@ -155,14 +198,16 @@ public class DBSnpLoader
 			System.out.println(snp);
 			L.add(snp.rs_id);
 			}
-		SecondaryDatabaseReader<Snp, Integer> r2=new SecondaryDatabaseReader<DBSnpLoader.Snp, Integer>(primaryDatabaseReader, cfg2);
+		SecondaryDatabaseReader<Snp, Rs> r2=new SecondaryDatabaseReader<DBSnpLoader.Snp,Rs>(primaryDatabaseReader, cfg2);
 		r2.open();
-		for(int i:L)
+		for(Rs i:L)
 			{
 			System.out.println("rs"+i);
-			for(long i2:r2.equal_range(i))
+			for(Rs i2:r2.getList(i))
 				{
-				System.out.println(r2.get(i2));
+				System.out.println(r2.getList(i2));
+				System.out.println(r2.getPrimaryKeyList(i2));
+				System.out.println(r2.getPrimaryList(i2));
 				}
 			
 			}
