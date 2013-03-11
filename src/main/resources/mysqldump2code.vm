@@ -1,0 +1,221 @@
+#macro( javaName $s )$s.substring(0,1).toUpperCase()$s.substring(1)#end
+#macro( enumName $s )#if($s=='+')PLUS#elseif($s=='-'
+)MINUS#elseif($s=='null'
+)NIL#{else}$s.replaceAll("-","_")#end#end
+#macro(sqltype $f)#if($f.isSet())java.util.Set<#javaName(${f.Field})>#elseif($f.isEnum()
+)#javaName(${f.Field})#elseif($f.Type.startsWith("int") || $f.Type.startsWith("smallint")
+)int#elseif($f.Type.startsWith("float")
+)float#{else}String#end#end
+import com.github.lindenb.dataindexer.TupleBinding;
+
+#foreach( $db in $mysqldump.database )
+@Generated
+public class #javaName(${db.name})
+
+	{
+	public #javaName(${db.name})()
+		{
+		}
+	
+	#foreach( $table in $db.tableStructure )
+		public static class #javaName(${table.name})
+
+			{
+			#foreach( $f in $table.field )
+			#if($f.isEnum() || $f.isSet())
+			
+			/** enumeration ${f.Field} */
+			
+			public enum #javaName(${f.Field})
+			
+				{
+				#foreach($x in ${f.enumeration} )
+				
+				#if($foreach.count>1),#end
+				#enumName(${x})
+				
+					{
+					@Override
+					public String getName()
+						{
+						return "${x}";
+						}
+					}
+				#end
+				
+				
+				}
+			#end
+			#end
+			
+			
+			#foreach( $field in $table.field )
+			
+			private #sqltype(${field}) ${field.Field}; /* defined as ${field.Type} */
+			
+			#end
+			
+			public #javaName(${table.name})()
+				{
+				}
+			
+			#foreach( $field in $table.field )
+			
+			public #sqltype(${field}) get#javaName(${field.Field})()
+				{
+				return this.${field.Field};
+				}
+			
+			public void set#javaName(${field.Field})(#sqltype(${field}) ${field.Field})
+				{
+				this.${field.Field}=${field.Field};
+				}
+			
+			
+			#end
+			
+			}
+		
+		
+		public static class #javaName(${table.name})Factory
+			{
+			public #javaName(${table.name})Factory()
+				{
+				}
+				
+			public #javaName(${table.name}) create(String tokens[]) throws IOException
+				{
+				#javaName(${table.name}) o=new  #javaName(${table.name})();
+				#foreach( $f in $table.field )
+				
+				#if(${f.isEnum()})
+					{
+					#javaName(${f.Field}) ${f.Field}=null;
+					for(#javaName(${f.Field}) f:#javaName(${f.Field}).values())
+						{
+						if(f.getName().equals(tokens[${foreach.count}-1]))
+							{
+							${f.Field}=f;
+							break;
+							}
+						}
+					if(${f.Field}==null) throw new IOException("?? "+tokens[${foreach.count}-1]);
+					o.set#javaName(${f.Field})(${f.Field});
+					}
+				#elseif(${f.isSet()})
+					{
+					Set<#javaName(${f.Field})> set=new HashSet<#javaName(${f.Field})>();
+					StreamTokenizer tokenizer = new StreamTokenizer( new StringReader(tokens[${foreach.count}-1]));
+					while(tokenizer.nextToken() != StreamTokenizer.TT_EOF)
+					    {
+					    String s2=tokenizer.sval;
+					    #javaName(${f.Field}) ${f.Field}=null;
+					    for(#javaName(${f.Field}) f:#javaName(${f.Field}).values())
+						{
+						if(f.getName().equals(s2))
+							{
+							${f.Field}=f;
+							break;
+							}
+						}
+					    if(${f.Field}==null) throw new IOException("?? "+tokens[${foreach.count}-1]);
+					    set.add(${f.Field});
+					    }
+
+					o.set#javaName(${f.Field})(set);
+					}
+				#else
+				
+				o.set#javaName(${f.Field})(#if($f.Type.startsWith("int") || $f.Type.startsWith("smallint")
+					)Integer.parseInt(tokens[${foreach.count}-1])#{else}tokens[${foreach.count}-1]#end);
+				#end
+				#end
+				return o;
+				}
+			}
+		
+		public static class #javaName(${table.name})TupleBinding
+			implements TupleBinding<#javaName(${table.name})>
+
+			{
+			public #javaName(${table.name})TupleBinding()
+				{
+				}
+			@Override
+			public void writeObject(final #javaName(${table.name}) o,DataOutputStream out) throws IOException
+				{
+				#foreach( $f in $table.field )
+				#if($f.Type.startsWith("int") || $f.Type.startsWith("smallint")
+					)out.writeInt(#{else}out.writeString(#{end}o.get#javaName(${f.Field})());
+				#end
+				}
+			@Override
+			public #javaName(${table.name}) readObject(DataInputStream in) throws IOException;
+				{
+				#javaName(${table.name}) o=new  #javaName(${table.name})();
+				#foreach( $f in $table.field )
+				#if(${f.isEnum()})
+					{
+					int i=in.readInt();
+					#javaName(${f.Field}) ${f.Field}=#javaName(${f.Field}).values()[i];
+					}
+				#elseif(${f.isSet()})
+					{
+					Set<#javaName(${f.Field})> set=new HashSet<#javaName(${f.Field})>();
+					int n=in.readInt();
+					for(int i=0;i< n;++i)
+						{
+						int j=in.readInt();
+						set.add(javaName(${f.Field}).values()[i]);
+						}
+					o.set#javaName(${f.Field})(set);
+					}
+				#else 
+				o.set#javaName(${f.Field})(#if($f.Type.startsWith("int") || $f.Type.startsWith("smallint")
+					)in.readInt()#{else}in.readString()#end);
+				#end
+				#end
+				return o;
+				}
+			}
+		
+		public static class #javaName(${table.name})PrimaryDb
+			extends TupleBinding<#javaName(${table.name})>
+
+			{
+			public #javaName(${table.name})PrimaryDb()
+				{
+				}
+			}
+		
+		#foreach( $index in $table.indexes )
+		
+		public static class #javaName(${table.name})#javaName(${index.name})Extractor
+			implements Extractor<bla>
+
+			{
+			@Override
+			public Set<?> extract(final #javaName(${table.name}) src)
+				{
+				Set<?> set=new HashSet<X>();
+				
+				return set;
+				}
+			}
+		
+		
+		public static class #javaName(${table.name})#javaName(${index.name})SecondaryDb
+			extends TupleBinding<#javaName(${table.name})>
+
+			{
+			public #javaName(${table.name})#javaName(${index.name})SecondaryDb()
+				{
+				}
+			}
+		
+		
+		#end
+		
+	#end
+	}
+#end
